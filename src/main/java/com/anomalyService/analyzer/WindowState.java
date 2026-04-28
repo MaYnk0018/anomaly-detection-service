@@ -1,0 +1,91 @@
+package com.anomalyService.analyzer;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import com.anomalyService.entity.LogLevel;
+
+/**
+ * Sliding window state for one service.
+ */
+public class WindowState {
+
+    private final String serviceId;
+    private final long windowSizeMs;
+    private final long bucketSizeMs;
+
+    private final LinkedHashMap<Long, Integer> buckets = new LinkedHashMap<>();
+    private final LinkedList<Map<String, Object>> logSample = new LinkedList<>();
+    private static final int MAX_SAMPLE_SIZE = 20;
+
+    public WindowState(String serviceId, int windowSizeMinutes, int bucketSizeSeconds) {
+        this.serviceId = serviceId;
+        this.windowSizeMs = (long) windowSizeMinutes * 60 * 1000;
+        this.bucketSizeMs = (long) bucketSizeSeconds * 1000;
+    }
+
+    public void addLog(LogLevel level, long timestampMs, Map<String, Object> logEntry) {
+        if (level == LogLevel.ERROR || level == LogLevel.FATAL) {
+            long bucketKey = timestampMs / bucketSizeMs;
+            buckets.merge(bucketKey, 1, Integer::sum);
+
+            if (logSample.size() >= MAX_SAMPLE_SIZE) {
+                logSample.removeFirst();
+            }
+            logSample.addLast(logEntry);
+        }
+        evictStale(timestampMs);
+    }
+
+    private void evictStale(long nowMs) {
+        long cutoffBucket = (nowMs - windowSizeMs) / bucketSizeMs;
+        buckets.entrySet().removeIf(e -> e.getKey() < cutoffBucket);
+    }
+
+    public Stats getStats(int minDataPoints) {
+        if (buckets.size() < minDataPoints) return null;
+
+        List<Integer> values = new ArrayList<>(buckets.values());
+        int n = values.size();
+
+        double sum = 0;
+        for (int v : values) sum += v;
+        double mean = sum / n;
+
+        double variance = 0;
+        for (int v : values) variance += Math.pow(v - mean, 2);
+        double stddev = Math.sqrt(variance / n);
+
+        if (stddev == 0) return null;
+
+        long latestBucketKey = buckets.keySet().stream().mapToLong(Long::longValue).max().orElse(0);
+        int currentCount = buckets.getOrDefault(latestBucketKey, 0);
+
+        double zScore = (currentCount - mean) / stddev;
+
+        long windowEndMs = latestBucketKey * bucketSizeMs + bucketSizeMs;
+        long windowStartMs = windowEndMs - windowSizeMs;
+
+        return new Stats(mean, stddev, currentCount, zScore, windowStartMs, windowEndMs);
+    }
+
+    public List<Map<String, Object>> getLogSample() {
+        return new ArrayList<>(logSample);
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public record Stats(
+            double mean,
+            double stddev,
+            int currentCount,
+            double zScore,
+            long windowStartMs,
+            long windowEndMs
+    ) {}
+}
