@@ -56,11 +56,17 @@ public class WindowState {
         long cutoffBucket = (nowMs - windowSizeMs) / bucketSizeMs;
         buckets.entrySet().removeIf(e -> e.getKey() < cutoffBucket);
     }
-
+    
     public Stats getStats(int minDataPoints) {
-        if (buckets.size() < minDataPoints) return null;
+        if (buckets.size() < minDataPoints + 1) return null;
 
-        List<Integer> values = new ArrayList<>(buckets.values());
+        //find last inserted bucket
+        long currentBucketKey= buckets.keySet().stream().mapToLong(Long::longValue).max().orElseThrow();
+        int currentCount = buckets.get(currentBucketKey);
+        //finding baseline values
+        List<Integer> values = buckets.entrySet().stream().filter(e-> e.getKey()!= currentBucketKey).map(Map.Entry::getValue).toList();
+
+        // List<Integer> values = new ArrayList<>(buckets.values());
         int n = values.size();
 
         double sum = 0;
@@ -74,7 +80,7 @@ public class WindowState {
         if (stddev == 0) return null;
 
         long latestBucketKey = buckets.keySet().stream().mapToLong(Long::longValue).max().orElse(0);
-        int currentCount = buckets.getOrDefault(latestBucketKey, 0);
+        // int currentCount = buckets.getOrDefault(latestBucketKey, 0);
 
         double zScore = (currentCount - mean) / stddev;
 

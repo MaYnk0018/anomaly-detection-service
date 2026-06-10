@@ -66,8 +66,9 @@ class WindowStateTest {
     @Test
     @DisplayName("Detects a clear spike")
     void detectsSpike() {
-        for (int i = 0; i < 5; i++) {
-            addErrors(2, (long) i * BUCKET_MS, 2);
+        int[] baseline = {1, 2, 1, 2, 1};
+        for (int i = 0; i < baseline.length; i++) {
+            addErrors(baseline[i], (long) i * BUCKET_MS, baseline[i]);
         }
 
         addErrors(50, 5 * BUCKET_MS, 50);
@@ -77,7 +78,37 @@ class WindowStateTest {
         assertThat(stats).isNotNull();
         assertThat(stats.currentCount()).isEqualTo(50);
         assertThat(stats.zScore()).isGreaterThan(2.0);
-        assertThat(stats.mean()).isCloseTo(10.0, within(0.5));
+        assertThat(stats.mean()).isCloseTo(1.4, within(0.01));
+    }
+
+    @Test
+    @DisplayName("Current bucket is excluded from the baseline")
+    void excludesCurrentBucketFromBaseline() {
+        int[] baseline = {1, 2, 1, 2, 1};
+        for (int i = 0; i < baseline.length; i++) {
+            addErrors(baseline[i], (long) i * BUCKET_MS, baseline[i]);
+        }
+        addErrors(100, 5 * BUCKET_MS, 100);
+
+        WindowState.Stats stats = window.getStats(MIN_DATA_POINTS);
+
+        assertThat(stats).isNotNull();
+        assertThat(stats.mean()).isCloseTo(1.4, within(0.01));
+        assertThat(stats.currentCount()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("Fills skipped and current buckets with zero errors")
+    void fillsZeroErrorBuckets() {
+        addErrors(1, 0L, 1);
+        addErrors(2, BUCKET_MS, 2);
+        window.addLog(LogLevel.INFO, 5 * BUCKET_MS, Map.of("level", "INFO"));
+
+        WindowState.Stats stats = window.getStats(MIN_DATA_POINTS);
+
+        assertThat(stats).isNotNull();
+        assertThat(stats.currentCount()).isZero();
+        assertThat(stats.mean()).isCloseTo(0.6, within(0.01));
     }
 
     @Test
@@ -89,7 +120,8 @@ class WindowStateTest {
         addErrors(100, 1 * BUCKET_MS, 100);
 
         for (int i = 51; i <= 60; i++) {
-            addErrors(5, (long) i * BUCKET_MS, 5);
+            int count = i % 2 == 0 ? 5 : 6;
+            addErrors(count, (long) i * BUCKET_MS, count);
         }
 
         window.addLog(LogLevel.ERROR, now, Map.of());
@@ -116,8 +148,9 @@ class WindowStateTest {
     @Test
     @DisplayName("FATAL logs are counted the same as ERROR")
     void fatalLogsAreCountedAsErrors() {
-        for (int i = 0; i < 4; i++) {
-            addErrors(2, (long) i * BUCKET_MS, 2);
+        int[] baseline = {1, 2, 1, 2, 1};
+        for (int i = 0; i < baseline.length; i++) {
+            addErrors(baseline[i], (long) i * BUCKET_MS, baseline[i]);
         }
 
         long spikeTime = 5 * BUCKET_MS;
