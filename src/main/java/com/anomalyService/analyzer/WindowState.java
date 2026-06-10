@@ -20,14 +20,26 @@ public class WindowState {
     private final LinkedHashMap<Long, Integer> buckets = new LinkedHashMap<>();
     private final LinkedList<Map<String, Object>> logSample = new LinkedList<>();
     private static final int MAX_SAMPLE_SIZE = 20;
+    private Long lastBucketKey;
 
     public WindowState(String serviceId, int windowSizeMinutes, int bucketSizeSeconds) {
         this.serviceId = serviceId;
         this.windowSizeMs = (long) windowSizeMinutes * 60 * 1000;
         this.bucketSizeMs = (long) bucketSizeSeconds * 1000;
     }
-
+    // Fix anomaly windows to include zero-error buckets
     public void addLog(LogLevel level, long timestampMs, Map<String, Object> logEntry) {
+        long currentBucketKey = timestampMs / bucketSizeMs;
+        if(lastBucketKey == null){
+            lastBucketKey = currentBucketKey;
+        } else if (currentBucketKey > lastBucketKey) {
+            // Fill in zero-count buckets for any gaps
+            for(long k = lastBucketKey+1; k< currentBucketKey;k++){
+                buckets.putIfAbsent(k, 0);
+            }
+            lastBucketKey= currentBucketKey ;
+        }
+
         if (level == LogLevel.ERROR || level == LogLevel.FATAL) {
             long bucketKey = timestampMs / bucketSizeMs;
             buckets.merge(bucketKey, 1, Integer::sum);

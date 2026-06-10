@@ -53,7 +53,7 @@ public class AnomalyEntity {
 
     @Column(name = "z_score", nullable = false)
     private double zScore;
-// helps in storing ENUM in DB column , @enumerated(EnumType.STRING)
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Severity severity;

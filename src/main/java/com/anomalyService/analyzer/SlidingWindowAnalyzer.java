@@ -20,6 +20,7 @@ public class SlidingWindowAnalyzer {
 
     private final SeverityClassifier severityClassifier;
 
+//     private final WindowState windowState;
     @Value("${logmind.anomaly.window-size-minutes:60}")
     private int windowSizeMinutes;
 
