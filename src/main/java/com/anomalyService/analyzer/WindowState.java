@@ -39,6 +39,8 @@ public class WindowState {
             }
             lastBucketKey= currentBucketKey ;
         }
+        buckets.putIfAbsent(currentBucketKey, 0);
+
 
         if (level == LogLevel.ERROR || level == LogLevel.FATAL) {
             long bucketKey = timestampMs / bucketSizeMs;
@@ -64,7 +66,7 @@ public class WindowState {
         long currentBucketKey= buckets.keySet().stream().mapToLong(Long::longValue).max().orElseThrow();
         int currentCount = buckets.get(currentBucketKey);
         //finding baseline values
-        List<Integer> values = buckets.entrySet().stream().filter(e-> e.getKey()!= currentBucketKey).map(Map.Entry::getValue).toList();
+        List<Integer> values = buckets.entrySet().stream().filter(e-> !e.getKey().equals(currentBucketKey)).map(Map.Entry::getValue).toList();
 
         // List<Integer> values = new ArrayList<>(buckets.values());
         int n = values.size();
@@ -77,6 +79,7 @@ public class WindowState {
         for (int v : values) variance += Math.pow(v - mean, 2);
         double stddev = Math.sqrt(variance / n);
 
+        //misses a spike after a flat baseline, such as [0,0,0,0] -> 10.
         if (stddev == 0) return null;
 
         long latestBucketKey = buckets.keySet().stream().mapToLong(Long::longValue).max().orElse(0);
