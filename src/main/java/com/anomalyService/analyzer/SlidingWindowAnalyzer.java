@@ -33,6 +33,7 @@ public class SlidingWindowAnalyzer {
     @Value("${logmind.anomaly.min-data-points:20}")
     private int minDataPoints;
 
+    //per service window state, to allow for multiple services to be analyzed independently
     private final ConcurrentHashMap<String, WindowState> windows = new ConcurrentHashMap<>();
 
     public Optional<DetectedAnomaly> analyze(
@@ -47,6 +48,7 @@ public class SlidingWindowAnalyzer {
 
         window.addLog(level, timestampMs, logEntry);
 
+        // Only analyze if we have enough data points
         WindowState.Stats stats = window.getStats(minDataPoints);
         if (stats == null) return Optional.empty();
         if (stats.zScore() <= zScoreThreshold) return Optional.empty();
@@ -54,6 +56,7 @@ public class SlidingWindowAnalyzer {
         log.warn("Anomaly detected: service={} zScore={} currentCount={} mean={}",
                 serviceId, String.format("%.2f", stats.zScore()), stats.currentCount(), stats.mean());
 
+        //severityClassifier classifies the severity of the anomaly based on the z-score and other factors
         return Optional.of(new DetectedAnomaly(
                 serviceId,
                 stats,
